@@ -12,13 +12,29 @@
 
 
 # provide name for folder that will hold this ngen version
-folder_name="ngen20230719"
+# NOTE: this folder is defined relative to the directory in which this file is located/executed.
+folder_name="ngen_20231024"
+
+################
+# If want to build ngen-cal you need to include a line in the requirements.txt file
+# Build ngen-cal?
+# true of false?
+# build_ngen-cal=true
+
+# string defining requirements.txt file to use when building venv environment
+# rqr_in should be defines relative to the directory in which this script is being execute.
+# the script will copy it to $folder_name
+rqr_in="requirements_20231024.txt"
 
 mkdir logs_${folder_name}
 
+# run deactivate and conda deactivate to ensure using clean slate for python environment
+deactivate || true
+conda deactivate || true
+
 # define python location
 # export Python_NumPy_INCLUDE_DIRS=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.venv/lib/python3.10/site-packages
-export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.venv/lib/python3.10/site-packages
+# export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.venv/lib/python3.10/site-packages
 
 
 {
@@ -30,7 +46,7 @@ export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.v
 		sudo apt-get install g++ &&
 		sudo apt install gfortran &&
 		sudo apt-get install python3-dev &&
-		sudo apt install python3 &&
+		sudo apt install python3.10 &&
 		sudo apt-get install libudunits2-dev &&
 		sudo apt-get install libnetcdf-dev libnetcdff-dev &&
 		sudo apt-get install libnetcdf-c++4-1 libnetcdf-c++4-dev ||
@@ -52,7 +68,16 @@ export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.v
 		git submodule update --init --recursive ||
 		exit 1
 	# try updating t-route since get message that I'm using a deprecated version
-	# git submodule update --init --recursive --remote -- extern/t-route
+	git submodule update --init --recursive --remote -- extern/t-route ||
+		exit 1
+
+        # replace topmodel repo with my own dev repo
+	cd extern/topmodel/topmodel
+	git remote add topmodelDev https://github.com/Ben-Choat/topmodel
+	git fetch topmodelDev
+	git checkout -b topmodelCal topmodelDev/remove-topmodel-output-fromNgen
+
+
 	
 	
 	
@@ -72,7 +97,7 @@ export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.v
 		
 	
 	# compile noah-owp and iso_c_fortran - add path to NetCDF libraries
-	echo -e "\n\nbuliding noah-owp and iso_c_fortran and adding netcfd libraries\n\n"
+	echo -e "\n\nbuilding noah-owp and iso_c_fortran and adding netcfd libraries\n\n"
 	cmake -B extern/noah-owp-modular/cmake_build -S extern/noah-owp-modular \
 		-DnetCDF_INCLUDE_DIR=/usr/include/ -DnetCDF_MOD_PATH=/usr/include/ \
 		-DnetCDF_FORTRAN_LIB=/usr/lib/x86_64_linux_gnu/libnetcdff.so &&
@@ -82,11 +107,16 @@ export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.v
 		exit 1
 	
 	# create python virtual environment
-	echo -e "\n\ninstalling python libraries w/.venv\n\n"
-	mkdir .venv &&
-		python3 -m venv .venv &&
-		source .venv/bin/activate &&
-		pip install numpy || # &&
+	echo -e "\n\ninstalling python libraries w/venv\n\n"
+	# install python-venv to get ensurepip
+	sudo apt install python3.10-venv
+	# copy requirments file to $folder_name
+	sudo cp ../$rqr_in .
+	mkdir venv &&
+		python3 -m venv venv &&
+		source venv/bin/activate &&
+		pip install -r $rqr_in ||
+		# pip install numpy &&
 		# pip install -U pip setuptools cython dask &&
 		# pip install deprecated &&
 		# pip install bmipy &&
@@ -96,35 +126,18 @@ export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.v
 		exit 1		
 	
 	
-	# compiling t-route
-	echo -e "\n\ninstalling/building t-route python libs\n\n"
-	pip install -e extern/t-route/src/ngen_routing/ &&
-		pip install -e extern/t-route/src/nwm_routing/ ||
-		exit 1
+      
 	
 	
 	
-	echo -e "\n\nprepending .venv directory to PATH\n\n"
+	echo -e "\n\nprepending venv directory to PATH\n\n"
 	echo -e "Set assuming PWD = ${PWD}\n\n"
-	export PATH="${PWD}/.venv/bin:$PATH"
+	export PATH="${PWD}/venv/bin:$PATH"
 
 	echo $PATH
 
-	
-#	echo -e "\n\nediting t-rout code as needed\n\n"
-#	cd extern/t-route/src/python_routing_v02
-#	sed -i '27 i export LIBRARY_PATH=/usr:$LIBRARY_PATH' compiler.sh
-#	sed -i '28 i export NETCDFINC=/usr/' compiler.sh
-#	sed -i 's/F90="gfortran"/F90=gfortran .\/compiler.sh/' compiler.sh
-	
-#	cd ../../../../
-	
-	
-#  sed -i "s|^\s*find_package(Python|set(Python_EXECUTABLE \"${PWD}/.venv/bin/python\")\nfind_package(Python|" CMakeLists.txt
-
-	
 	# compile ngen -Add boost path -with routing
-	echo -e "\n\nbuliding ngen\n\n"
+	echo -e "\n\nbuilding ngen\n\n"
 	cmake -DCMAKE_BUILD_TYPE=Debug -B cmake_build -S . \
 		-DBoost_INCLUDE_DIR=/home/ubuntu/boost_1_77_0 \
 		-DNGEN_ACTIVATE_PYTHON:BOOL=ON \
@@ -135,22 +148,55 @@ export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.v
 		# -DMPI_ACTIVE:=BOOL=ON && \
 		# -DLSTM_TORCH_LIB_ACTIVE:=ON && \
 		make -j 8 -C cmake_build &&
+
+		echo -e "\n\nPWD: $PWD\n\n"
 	
+		# bmi_c
 		cmake -B extern/test_bmi_c/cmake_build -S extern/test_bmi_c &&
 		make -C extern/test_bmi_c/cmake_build &&
+		# bmi_fortran
 		cmake -B extern/test_bmi_fortran/cmake_build -S extern/test_bmi_fortran &&
 		make -C extern/test_bmi_fortran/cmake_build
 		
 
+	# t-route
+	# download
+
+	# first, remove default t-route folder that comes with ngen, it is old
+	cd extern
+#	sudo rm -rf t-route
+	mv t-route t-route_ORG
+	# now clone the new t-route
+	git clone --progress --single-branch --branch master http://github.com/NOAA-OWP/t-route.git
+
+	cd t-route
+
+	# compile and install
+	./compiler.sh
+
+	# copy build_ngen.sh and requirements.txt files to build folder
+	cd $folder_name
+	sudo mkdir BuildScripts
+	sudo mv $rqr_in BuildScripts
+	sudo cp ../build_ngen.sh BuildScripts
+
 } | tee -a logs_${folder_name}/build_log.txt 2>&1
 
 {	
-	echo -e "\n\ntesting install\n\n"
+	echo -e "\n\ntesting ngen bmi installs\n\n"
 	cd $folder_name
 #	./cmake_build/test/test_all &&
 	./cmake_build/test/test_bmi_c &&
-		./cmake_build/test/test_bmi_fortran ||
-		exit 1
+	./cmake_build/test/test_bmi_fortran || # &&
+	./cmake_build/test/test_bmi_python ||
+	exit 1
+
+	# t-route
+	echo -e "\n\ntesting t-route\n\n"
+	source venv/bin/activate
+	cd extern/t-route/test/LowerColorado_TX
+	python -m nwm_routing -f test_AnA.yaml
+
 
 
 	# t-route unit-test (changing syntax for consistency
@@ -163,4 +209,6 @@ export Python_NumPy_INCLUDE_DIR=/home/bchoat/Projects/NWM_NGEN/${folder_name}/.v
 
 } | tee -a logs_${folder_name}/test_log.txt 2>&1
 
+# move logs to new build
+mv logs_${folder_name} $folder_name
 
