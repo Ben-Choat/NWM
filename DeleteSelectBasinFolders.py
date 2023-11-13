@@ -77,10 +77,21 @@ try:
             # check if folder is present in dir_check
             temp_check = Path(f'{dir_check}/{folder}')
             # if folder is present, get its size
+            
             if temp_check.is_dir():
                 # if ngen is present in temp_check, it is a symlink, so remove it
-                if Path(f'{temp_del}/ngen').is_dir():
-                    shutil.rmtree(f'{temp_del}/ngen')
+                # check up to two levels deep
+                ngen_symlinks = [f'{temp_del}/ngen'] + \
+                                list(temp_del.rglob('*/ngen')) + \
+                                list(temp_del.rglob('*/*/ngen'))
+                # for ngen_symlink in ngen_symlinks:
+                #     if ngen_symlink.is_symlink() and not ngen_symlink.exists():
+                #         ngen_symlink.unlink()
+                
+                # if Path(f'{temp_del}/ngen').is_dir():
+                #     shutil.rmtree(f'{temp_del}/ngen')
+
+
                 temp_check_size = sum(f.stat().st_size for f in temp_check.rglob('*'))
                 # check size against temp_del, if same then delete
                 if temp_del_size == temp_check_size:
