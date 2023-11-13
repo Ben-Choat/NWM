@@ -66,49 +66,67 @@ folders_del = [
 ]
 
 # loop through folders_del and delete those folders
-for f in folders:
-    print(f)
-    if f in folders_del:
-        folder = f
-        temp_del = Path(f'{dir_del}/{folder}')
-        # get temp_del size
-        temp_del_size = sum(f.stat().st_size for f in temp_del.rglob('*'))
-        # check if folder is present in dir_check
-        temp_check = Path(f'{dir_check}/{folder}')
-        # if folder is present, get its size
-        if temp_check.is_dir():
-            temp_check_size = sum(f.stat().st_size for f in temp_check.rglob('*'))
-            # check size against temp_del, if same then delete
-            if temp_del_size == temp_check_size:
-                shutil.rmtree(temp_del)
-                notes_out.append('DELETED_Backed_Up_Same_Size')
-                del_size.append(temp_del_size)
-                check_size.append(temp_check_size)
-            else: # otherwise, log notes and continue
-                notes_out.append('NotDELETED_Backup_Not_Same_Size')
-                del_size.append(temp_del_size)
+try:
+    for f in folders:
+        print(f)
+        if f in folders_del:
+            folder = f
+            temp_del = Path(f'{dir_del}/{folder}')
+            # get temp_del size
+            temp_del_size = sum(f.stat().st_size for f in temp_del.rglob('*'))
+            # check if folder is present in dir_check
+            temp_check = Path(f'{dir_check}/{folder}')
+            # if folder is present, get its size
+            if temp_check.is_dir():
+                # if ngen is present in temp_check, it is a symlink, so remove it
+                if Path(f'{temp_del}/ngen').is_dir():
+                    shutil.rmtree(f'{temp_del}/ngen')
+                temp_check_size = sum(f.stat().st_size for f in temp_check.rglob('*'))
+                # check size against temp_del, if same then delete
+                if temp_del_size == temp_check_size:
+                    shutil.rmtree(temp_del)
+                    notes_out.append('DELETED_Backed_Up_Same_Size')
+                    del_size.append(temp_del_size)
+                    check_size.append(temp_check_size)
+                else: # otherwise, log notes and continue
+                    notes_out.append('NotDELETED_Backup_Not_Same_Size')
+                    del_size.append(temp_del_size)
+                    check_size.append(temp_check_size)
+                    continue
+                    
+            else:
+                # if not a folder that exists, then write to output log and continue
+                notes_out.append('NotDELETED_Folder_Not_Backed_Up')
+                del_size.append('NA')
                 check_size.append(temp_check_size)
                 continue
-                
+
         else:
-            # if not a folder that exists, then write to output log and continue
-            notes_out.append('NotDELETED_Folder_Not_Backed_Up')
-            del_size.append(temp_del_size)
-            check_size.append(temp_check_size)
-            continue
+            notes_out.append('KEEP_FOLDER')
+            del_size.append('NA')
+            check_size.append('NA')
+except Exception as e:
+    # write list of deleted folders to a csv file
+    df_deleted = pd.DataFrame({'Folders': folders,
+                            'Notes': notes_out,
+                            'WorkingSize': del_size,
+                            'BackupSize': check_size})
 
+    if Path(file_out).is_file():
+        df_deleted.to_csv(file_out, mode = 'a', index = False, header = False)
     else:
-        notes_out.append('KEEP_FOLDER')
-        del_size.append(temp_del_size)
-        check_size.append(temp_check_size)
+        df_deleted.to_csv(file_out, index = False)
 
 
+    raise e
 
 # write list of deleted folders to a csv file
 df_deleted = pd.DataFrame({'Folders': folders,
-                           'Notes': notes_out,
-                           'WorkingSize': del_size,
-                           'BackupSize': check_size})
-df_deleted.to_csv(file_out, mode = 'a', index = False)
+                        'Notes': notes_out,
+                        'WorkingSize': del_size,
+                        'BackupSize': check_size})
 
-# %%
+if Path(file_out).is_file():
+    df_deleted.to_csv(file_out, mode = 'a', index = False, header = False)
+else:
+    df_deleted.to_csv(file_out, index = False)
