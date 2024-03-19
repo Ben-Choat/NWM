@@ -1,0 +1,2 @@
+hru_id_CAMELS,Folder_CAMELS,outlet_id_CAMELS,RunPET,NCat,SA_analysis,aridity,p_seasonality,frac_snow,Snow10_arid1_5,Lat,Long,N_nexus,Q_Best_Overall,Q_Best_CFE,A_Best1,A_Best2,Model_1,CFE,CFE_X,Topmodel,gauge_id,gauge_lat,gauge_lon,elev_mean,slope_mean,area_gages2,area_geospa_fabric
+13235000,camels_13235000_24158523,24158523,0,152,1,1.04542058272682,-0.810877697022429,0.677895075896552,0,44.23518107156229,-115.391312271355,62.0,NOAH_CFE,NOAH_CFE,PET_4,PET_3,PET_4,0,0,0,13235000,44.08528,-115.62222,2075.34,126.24587,1163.23,1158.47

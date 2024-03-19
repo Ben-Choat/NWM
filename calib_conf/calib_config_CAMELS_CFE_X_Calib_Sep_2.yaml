@@ -1,0 +1,69 @@
+cfe_params: &id001
+- init: '0.08999999999999998'
+  max: 1
+  min: 0
+  name: x_Xinanjiang_shape_parameter
+- init: '9.568285714285714e-06'
+  max: 0.000726
+  min: 0.0
+  name: satdk
+- init: '1.0'
+  max: 21.9
+  min: 0.0
+  name: b
+- init: '0.14602309042857145'
+  max: 0.955
+  min: 0
+  name: satpsi
+- init: '0.47831521071428573'
+  max: 1.0
+  min: 0.2
+  name: maxsmc
+- init: 0.01
+  max: 1.0
+  min: 0.0
+  name: Klf
+- init: 0.03
+  max: 1.0
+  min: 0.0
+  name: Kn
+- init: '1.8e-05'
+  max: 0.1
+  min: 1.8e-06
+  name: Cgw
+- init: '1.0'
+  max: 8
+  min: 1
+  name: expon
+- init: '0.15228024292'
+  max: 2
+  min: 0.01
+  name: max_gw_storage
+general:
+  iterations: 3
+    #  log_file: test_log
+  log: False
+  start_iteration: 0
+  strategy:
+    algorithm: dds
+    type: estimation
+  workdir: /home/west/Projects/CAMELS/CAMELS_Files_Ngen/camels_10259000_22592131/
+model:
+  binary: ./ngen/cmake_build/ngen
+  catchments: ./spatial/catchment_data.geojson
+  crosswalk: ./parameters/cross-walk.json
+  nexus: ./spatial/nexus_data.geojson
+  paritions: partition_config.json
+  parallel: 1
+  params:
+    CFE: *id001
+      # realization: ./Realization_pet_cfe_X_calibNC.json
+      # realization: ./Realization_noahowp_cfe_X_calibNC.json
+  realization: ./Realization_pet_cfe_X_calibNC.json
+  strategy: uniform
+  type: ngen
+  eval_params:
+    evaluation_start: '2007-01-02 00:00:00'
+    evaluation_stop: '2007-09-01 00:00:00'
+    objective: kling_gupta
+    target: 'max'
