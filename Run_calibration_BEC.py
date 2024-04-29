@@ -7,6 +7,12 @@ This script expects to be executed from an environment containing
 each of the imported libraries. For example, when I run it I use:
     sudo /home/bchoat/Python/envs/genenv311/bin/python NameOfThisFile.py
 
+
+I've edited this file to expect to be executed using the parallel ngen build.
+It can still run on 1 processor,  but must be executed using, for example:
+ngen/cmake_build/partitionGenerator spatial/catchment_data.geojson spatial/nexus_data.geojson partition_config.json 1 '' ''
+mpirun -n 1 ngen/cmake_build/ngen spatial/catchment_data.geojson "all" spatial/nexus_data.geojson "all" Realization_noahowp_Topmodel_calibNC.json partition_config.json
+
 '''
 
 import sys
@@ -22,7 +28,7 @@ import glob
 import geopandas as gp
 from datetime import datetime
 
-NextGen_folder = "/home/west/git_repositories/ngen_20240111_calib/ngen"
+NextGen_folder = "/home/west/git_repositories/ngen_20240327_calib/ngen"
 print(f'\n\nUsing NGEN install located in: {NextGen_folder}\n')
 
 # Define which python to use when calling subprocess.call(python ...) - BChoat
@@ -44,11 +50,11 @@ cfe_iterations = 300 #2 # 300
 # We may test if this has been fixed later. If so, we can add basins.
 min_nexuses = 2
 
-# manually running in parallel by running serial jobs in different temrinals
+# manually running in parallel by running serial jobs in different terminals
 # so define min and max number catchments
-# dividing by 0, 12, 18, 32, 48, and 1000
-min_ncat = 0 
-max_ncat = 100000
+# dividing into <50, 70, 90, 110, 150
+min_ncat = 0
+max_ncat = 50
 
 # if want to run test runs, provide hru_ids for catchments here
 # set as empty list if do not want to run tests
@@ -57,22 +63,35 @@ hru_run = []
 
 # main folder holding individual HRU information (i.e., the main working directories for this script
 Hydrofabrics_folder="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/"
+# Hydrofabrics_folder_HD="/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen_Test/"
 Hydrofabrics_folder_HD="/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/"
+
 
 # file holding information about best models and runs. 
 # Used as basis for subsetting to hru's we are working with here.
 # Select_calibration_file="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/Select_calibration_HLR_RFC.csv"
 # Selected_calibration = Selected_calibration[~Selected_calibration.index.duplicated(keep='first')]
 # Select_calibration_file="/media/west/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/Results/SelectModelCal/CAMELS_v3_calib_BestModels.csv"
-# Select_calibration_file="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/CAMELS_v3_calib_BestModelsAll.csv"
-Select_calibratino_file="/home/west/Projects/CAMELS/NextGenCode/Calibration/TM_CalibTestCatchments"
+Select_calibration_file="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/CAMELS_v3_calib_BestModelsAll.csv"
+# Select_calibration_file="/home/west/Projects/CAMELS/NextGenCode/Calibration/TM_CalibTestCatchments.csv"
+# Select_calibration_file="/home/west/Projects/CAMELS/NextGenCode/Calibration/ParallelTestCatchments.csv"
+# Select_calibration_file="/home/west/Projects/CAMELS/NextGenCode/Calibration/ParallelTestCatchment_13235000.csv"
+
+
 
 # working with Selected_calibration_file
 # do not need this since same info in AllBasins2023-03-141248.csv read in below
 ALL=pd.read_csv(Select_calibration_file,dtype={'hru_id_CAMELS': str})
 ALL=ALL.set_index(['hru_id_CAMELS'])
 ALL=ALL.rename(columns={'N_Nexus':'N_nexus'})
-ALL=ALL.drop(['Q_Best_Topmodel','Q_Best_CFE_X'],axis=1).dropna()
+# get columns to drop
+colDrop = [x for x in ALL.columns if "Q_Best_" in x]
+# ALL=ALL.drop(['Q_Best_Topmodel','Q_Best_CFE_X'],axis=1).dropna()
+# print(f"ALL (Select_Calibration): {ALL}")
+# ALL=ALL.drop(colDrop, axis = 1).dropna()
+# print(f"ALL (Select_Calibration): {ALL}")
+
+
 
 Selected_calibration=ALL.copy()
 # set up environment to enable everything to be ran using correct venv env and bash
@@ -85,6 +104,8 @@ calib_config_dir="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/calib_conf/"
 # these are evaluation times - not run times
 start_time="2008-10-01 00:00:00"
 end_time="2013-10-01 00:00:00"
+# end_time="2008-10-05 00:00:00"
+
 
 # Rainfall_Runoff_ModelAr=["CFE","CFE_X","Topmodel"]
 Rainfall_Runoff_ModelAr=['Topmodel']
@@ -98,26 +119,38 @@ idd=[]
 # File with subset of catchments that have been prioritized
 # prioritized small basins w/ > 2 nexuses
 # Priority_file='/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/Calib_plots_Primary/AllBasins2022-11-291248.csv'
-Priority_file='/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/Calib_plots_Primary/AllBasins2022-12-061248.csv'
+# Priority_file='/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/Calib_plots_Primary_Original/AllBasins2022-12-061248.csv'
+Priority_file='/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/Calib_plots_Primary/AllBasins2022-11-291248.csv'
+
 
 # Priority_file = '/home/west/Projects/CAMELS/CAMELS_Files_Ngen/ForPaper/AllBasins2023-03-141248.csv'
 Priority=pd.read_csv(Priority_file,dtype={'hru_id_CAMELS': str})
+
+print(f"Selected_calibration.index; {Selected_calibration.index}")
+# subset to hru's in Selected_calibrations
+Priority = Priority[Priority['hru_id_CAMELS'].isin(Selected_calibration.index)]
 Priority=Priority.set_index(['hru_id_CAMELS'])
 Priority=Priority.dropna()
+
+print(f'Priority: {Priority}')
 
 # subset to HRU's as desired
 # BChoat - Editing to run any catchment that previously had output for CFE or CFE_X
 # this is because we want to run the same catchments for topmodel, that have
 # previously been ran for CFE and/or CFE_X
-Priority=Priority[(Priority['CFE']==1) | (Priority['CFE_X']==1)]
+# Priority=Priority[(Priority['CFE']==1) | (Priority['CFE_X']==1)]
 #Priority=Priority[(Priority['CFE']==1) | (Priority['CFE_X']==1) | (Priority['Topmodel']==1)]
 #Priority['Sum']=Priority['CFE']+Priority['CFE_X']+Priority['Topmodel']
 #Priority=Priority[Priority['Sum']==1]
 #Priority=Priority[(Priority['Sum']>=2)]
 
+print(f'Selected_calibration: {Selected_calibration}')
+print(f'Priority.index.values: {Priority.index.values}')
 # BChoat: we only want to run HRUs that were previously ran for CFE, so subset to those catchments
 Selected_calibration=Selected_calibration.loc[Priority.index.values]
 Selected_calibration=Selected_calibration.sort_values(by="NCat")
+print(f'Selected_calibration: {Selected_calibration}')
+
 try:
     Selected_calibration=Selected_calibration.drop('04197170')
 except:
@@ -142,7 +175,6 @@ Selected_calibration = Selected_calibration[
         (Selected_calibration['NCat'] < max_ncat)
         ]
 
-
 # print current python as sanity check
 which_py = subprocess.check_output('which python', shell = True)
 which_py = which_py.decode('utf_8').strip()
@@ -159,6 +191,7 @@ elif flag_obj == 'nnse':
 else:
     print('No objective, or invalid objective, defined')
 
+
 for i in range(0,len(Selected_calibration)):
 # for i in range(0, 1):
 # for i in range(0, 3):
@@ -167,11 +200,15 @@ for i in range(0,len(Selected_calibration)):
 
     print(f'Number of catchments = {Selected_calibration.iloc[i]["NCat"]}')
     # set up partition file for running in parallel - BChoat
-    if Selected_calibration.iloc[i]['NCat'] < 12: partition = 1
-    elif Selected_calibration.iloc[i]["NCat"] < 18: partition = 1 #2
-    elif Selected_calibration.iloc[i]["NCat"] < 32: partition = 1 # 4 
-    elif Selected_calibration.iloc[i]["NCat"] < 48: partition = 1 # 8
-    else:  partition = 1 # 16
+    if Selected_calibration.iloc[i]['NCat'] < 100: partition = 1 # 1
+#    elif Selected_calibration.iloc[i]["NCat"] < 18: partition = 1 # 1 #2
+#    elif Selected_calibration.iloc[i]["NCat"] < 1: partition = 1 # 1 # 4 
+#    elif Selected_calibration.iloc[i]["NCat"] < 48: partition = 1 # 1 # 8
+#    elif Selected_calibration.iloc[i]["NCat"] < 64: partition = 1 # 1 # 8
+    elif Selected_calibration.iloc[i]["NCat"] > 150: partition = 25 # 1 # 8
+
+ 
+    else:  partition = 1 # 1 # 16
         
         
     for j in range(0, len(Rainfall_Runoff_ModelAr)):
@@ -191,7 +228,7 @@ for i in range(0,len(Selected_calibration)):
             Rainfall_Runoff_Model=Rainfall_Runoff_ModelAr[j]
             now = datetime.now()
             dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-            str_log="Collecting params for,"+hru_id+","+dt_string+","+PET+","+Rainfall_Runoff_Model+"\n"
+            str_log="\nCollecting params for,"+hru_id+","+dt_string+","+PET+","+Rainfall_Runoff_Model+"\n"
             file1 = open(Hydrofabrics_folder+"calib_log.txt", "a")  # append mode
             file1.write(str_log)    
             file1.close()
@@ -293,7 +330,7 @@ for i in range(0,len(Selected_calibration)):
                 try:
                     now = datetime.now()
                     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-                    str_log="Starting running calibration,"+hru_id+","+dt_string+"\n"
+                    str_log="\n\nStarted running calibration,"+hru_id+","+dt_string+"\n"
                     file1 = open(Hydrofabrics_folder+"calib_log.txt", "a")  # append mode
                     file1.write(str_log)
                     file1.close()
@@ -312,7 +349,9 @@ for i in range(0,len(Selected_calibration)):
                     
                     # Convert forcing from CSV to NETCDF if it does not exist    
                     # if NETCDF file size is < 5000, then assumed incorrect, so recreate.
-                    if (not os.path.exists(output_file)) | (size<5000):
+                    # BChoat; 5000 was not catching some incorrect files, so upping to 15000
+                    # won't hurt to remake the .nc files 
+                    if (not os.path.exists(output_file)) | (size<15000):
 
                         os.chdir(NextGen_folder+"/utilities/data_conversion")
                         str_sub="python csv2catchmentnetcdf.py -i "+input_dir+ " -o "+ output_file+ " -j 2"
@@ -428,6 +467,7 @@ for i in range(0,len(Selected_calibration)):
 
                     # replace CFE variable if needed
                     if(Rainfall_Runoff_Model=="CFE") | (Rainfall_Runoff_Model=="CFE_X"): 
+                        print("line 460; in RRM==CFE | RRM=CFE_X")
                         Xinanjiang_param="/home/west/Projects/CAMELS/params_code/Xinanj_params.csv"
                         Xin_param=pd.read_csv(Xinanjiang_param,index_col=0)
                         soil_params['x_Xinanjiang_shape_parameter']=Xin_param.loc[soil_params['wf_ISLTYP'].values]['XXAJ'].values
@@ -440,16 +480,39 @@ for i in range(0,len(Selected_calibration)):
                             para=data_loaded['model']['params']['CFE'][jj]['name']
 
                             if para in dict_param_name:            
+                                print("line 473; in para in dict...")
                                 if('PET' in PET) & (Selected_calibration['frac_snow'].iloc[i]>=0.1):
-                                    data_loaded_real['global']['formulations'][0]['params']['modules'][2]['params']['model_params'][para]=soil_params[dict_param_name[para]].mean() 
+                                    print("line 475")
+                                    print(f"para: {para}")
+
+                                    print(f"soil_params[dict_param_name[para]].mean(): {soil_params[dict_param_name[para]].mean()}")
+                                    print(f"data_loaded_real: {data_loaded_real}")
+
+                                    print(f"calib_realiz: {calib_realiz}")
+
+                                    print(f"data_loaded_real['global']['formulations'][0]['params']['modules'][2]:"\
+                                            f"{data_loaded_real['global']['formulations'][0]['params']['modules'][2]}")
+
+                            
+                                    print(f"data_loaded_real['global']['formulations'][0]['params']['modules'][3]['params']['model_params']:"\
+                                            f"{data_loaded_real['global']['formulations'][0]['params']['modules'][3]['params']['model_params']}")
+
+#                                     print(f"data_loaded_real['global']['formulations'][0]['params']['modules'][2]['params']['model_params'][para]:"\
+#                                             f"{data_loaded_real['global']['formulations'][0]['params']['modules'][2]['params']['model_params'][para]}")
+                                    data_loaded_real['global']['formulations'][0]['params']['modules'][3]['params']['model_params'][para]=soil_params[dict_param_name[para]].mean() 
+                                    print("line 477")
                                 else:
-                                    data_loaded_real['global']['formulations'][0]['params']['modules'][2]['params']['model_params'][para]=soil_params[dict_param_name[para]].mean() 
+                                    data_loaded_real['global']['formulations'][0]['params']['modules'][3]['params']['model_params'][para]=soil_params[dict_param_name[para]].mean() 
+                                    
+
+                        print("line478; still in xxx|xxxx")
      
                     if(Forcing=="CSV"): 
                         data_loaded_real['global']['forcing']={"file_pattern": "{{id}}.csv", "path": "./forcing/", "provider": "CsvPerFeature"}                 
                         
                     if(Forcing=="NetCDF"): 
                         data_loaded_real['global']['forcing']={'path': './forcing.nc', 'provider': 'NetCDF'} 
+                    print("line 483; just passed Forcing==xxx")
                         
                     json_object=json.dumps(data_loaded_real,indent=4)
                     with open(calib_realiz,"w") as outfile:
@@ -491,6 +554,16 @@ for i in range(0,len(Selected_calibration)):
                     with open(cross_walk_file,"w") as outfile:
                         outfile.write(json_object)                           
                     ######################################
+                    
+
+                    # if the flowpath_parameters_mod.json file does not exist, then copy it from S3 bucket
+                    print('about to copy from s3')
+                    catchment_file = f'{work_dir}parameters/flowpath_parameters_mod.json'
+                    if(not os.path.isfile(catchment_file)):
+                        str_sub=f"aws s3 cp s3://formulations-dev/CAMELS20/{Folder_CAMELS}/parameters/flowpath_parameters_mod.json {catchment_file}"
+                        print(f'running {str_sub}')
+                        out=subprocess.call(str_sub,shell=True)
+                
                     
                     
           
@@ -539,8 +612,12 @@ for i in range(0,len(Selected_calibration)):
                         now = datetime.now()
                         dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
                         str_log="Finish running calibration,"+hru_id+","+dt_string+","+PET+","+Rainfall_Runoff_Model+"\n"
+                        str_part = f"N_Partitions: {partition}\n"
+                        str_elapsed = f'Elapsed Time: {elapsed_time} seconds\n\n'
                         file1 = open(Hydrofabrics_folder+"calib_log.txt", "a")  # append mode
                         file1.write(str_log)
+                        file1.write(str_part)
+                        file1.write(str_elapsed)
                         file1.close()
                     
                         # BChoat: later, the objective file is moved to the correct folder (e.g., cwd/NOAH_Topmodel)
