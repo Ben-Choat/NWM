@@ -9,13 +9,43 @@ import plotly.express as px
 
 
 # %%
+'''
+NWM_performance_{}.csv
+{} = first: Luciana's original runs with error in velocity and no calibratable params
+...second: Run after integration of calibratable params, but excluding velocity params
+... third: Including vel params (chv: 100, 25,000, 3600; rv: 1, 5000, 1000)
+... fourth: same as third except (chv: 10, 7,000, 3600; rv: 1, 5000, 1000) only ~50 catchments
+... fifth: chv: 10, 4,000, 3600; rv: 1, 4000, 1000
+
+... seventh:standard run but with new set up (iterations=175)
+... 8: neighborhood = 0.5 (instead of default 0.2) (iterations=175)
+... 9. standard with iterations = 500
+'''
 df1 = pd.read_excel(
-    'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_first.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_first.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_second.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_third.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_8.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_9.xlsx',
+    'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_seventh.xlsx',
     dtype={'hru_id_CAMELS': 'str'}
 )
 
 df2 = pd.read_excel(
-    'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_second.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_second.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_third.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_fourth.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_fifth.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_sixth.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_seventh.xlsx',
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_8.xlsx',
+    'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_9.xlsx',
+    dtype={'hru_id_CAMELS': 'str'}
+)
+
+df3 = pd.read_excel(
+    # 'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_second.xlsx',
+    'C:/Projects/NOAA_NWM/MISCFiles/NWM_performance_third.xlsx',
     dtype={'hru_id_CAMELS': 'str'}
 )
 
@@ -30,6 +60,28 @@ df_NCat = pd.read_csv(
     # usecols = ['hru_id_CAMELS', 'NCat', 'N_nexus', 'aridity', 'p_seasonality', 'frac_snow'],
     dtype={'hru_id_CAMELS': 'str'}
 )
+df_NCat2 = pd.read_csv(
+    'C:/Projects/NOAA_NWM/MISCFiles/AllBasins2022-11-291248.csv',
+    # usecols = ['hru_id_CAMELS', 'NCat', 'N_nexus', 'aridity', 'p_seasonality', 'frac_snow'],
+    dtype={'hru_id_CAMELS': 'str'}
+)
+
+# file used for subsetting hrus in calibration script
+df_BestMods = pd.read_csv(
+    'C:/Projects/NOAA_NWM/MISCFiles/CAMELS_v3_calib_BestModelsAll.csv',
+    dtype={'hru_id_CAMELS': str}
+)
+df_BestMods = df_BestMods[~df_BestMods['A_Best1'].isna()]
+
+# get list of HRUs present in directory on shared3, but not showing up in results
+hrus = pd.read_csv('C:/Projects/NOAA_NWM/MISCFiles/HRUs.csv')
+'''
+For some reason camels_05507600_4868933 is not appearing in the results for
+the third run, but is present in the results directory on the expansion drive.
+- 05507600 is not appearing because we do not have USGS observed streamflow for it
+
+'''
+
 '''
 Catchment 13235000 was not included in our original calibrations, but has
 152 catchments, so I'm going to use it in testing parallelization.
@@ -38,11 +90,23 @@ Catchment 13235000 was not included in our original calibrations, but has
 
 dftm1 = df1.query("Model_RR == 'Topmodel'")
 dftm2 = df2.query("Model_RR == 'Topmodel'")
+dftm3 = df3.query("Model_RR == 'Topmodel'")
+
+# get differences in hrus represented by dftm1 and dftm2
+set1 = set(dftm1['hru_id_CAMELS'])
+set2 = set(dftm2['hru_id_CAMELS'])
+set3 = set(dftm3['hru_id_CAMELS'])
+setdiff12 = set1.difference(set2)
+setdiff21 = set2.difference(set1)
+setdiff13 = set1.difference(set3)
+setdiff31 = set3.difference(set1)
+setdiff32 = set3.difference(set2)
 
 ###################
 
 df1.groupby('Model_RR')['KGE'].count()
 df2.groupby('Model_RR')['KGE'].count()
+df3.groupby('Model_RR')['KGE'].count()
 
 '''
 The NWM_performance_first.xlsx file from 1st calibrations has 98 results for
@@ -246,4 +310,54 @@ df_NCatTest = pd.merge(df_NCatTest, df_attr,
 # )
 
 
-# %%
+# %% investigate distribution of N_Cat to see how to divide jobs
+##################################
+
+
+sns.kdeplot(df_NCat['NCat'])
+plt.show()
+sns.histplot(df_NCat['NCat'], bins=10)
+plt.show()
+
+df_NCat.sort_values(by = 'NCat').tail(50)
+
+
+# %% ID catchment in NE that is performing very bad for topmodel
+####################################
+
+
+df_temp = dftm.query("gauge_lat>40 & gauge_lon > -80 ").sort_values(by = 'KGE_1')
+id_poor = df_temp.loc[df_temp['KGE_1'] == df_temp['KGE_1'].min(), 'hru_id_CAMELS'].values[0]
+df_temp[['KGE_1', 'KGE_2']]
+print(id_poor)
+
+
+df_temp = df1.query("hru_id_CAMELS == @id_poor")
+df_temp2 = df2.query("hru_id_CAMELS == @id_poor")
+
+# df_temp[['hru_id_CAMELS', 'KGE_1', 'KGE_2']]
+
+
+
+# %% Explore
+##########################
+
+dftm.query('hru_id_CAMELS == "14362250"')[['KGE_1', 'KGE_2']]
+
+dftm.query('hru_id_CAMELS == "10259000"')[['KGE_1', 'KGE_2']]
+
+dftm.query('hru_id_CAMELS == "11476600"')[['KGE_1', 'KGE_2']]
+
+dftm.query('hru_id_CAMELS == "07359610"')[['KGE_1', 'KGE_2']]
+
+df2.query('hru_id_CAMELS == "14362250"')[['KGE']]
+df2.query('hru_id_CAMELS == "10336660"')[['KGE']]
+df2.query('hru_id_CAMELS == "07359610"')[['KGE']]
+
+
+df_expl = dftm[['hru_id_CAMELS', 'NCat', 'frac_snow', 'N_nexus', 'KGE_1', 'KGE_2']]
+df_expl['KGE_DIFF'] = df_expl['KGE_2'] - df_expl['KGE_1']
+df_expl.sort_values(by = 'KGE_DIFF')
+
+
+
