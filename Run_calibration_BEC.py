@@ -40,7 +40,7 @@ Forcing="NetCDF" # NEed to adapt realization and ngen-cal code
 
 # set number of iterations for using TOPMODEL and CFE/CFE_X
 # NOTE: ngen-cal requires number of iterations to be >= 2
-tm_iterations = 120 # 2 # 120
+tm_iterations = 175 # 2 # 120 175 500
 cfe_iterations = 300 #2 # 300
 
 # set the minimum number of nexuses that must be present for a job to run
@@ -126,13 +126,13 @@ Priority_file='/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/Calib_plots_Pr
 # Priority_file = '/home/west/Projects/CAMELS/CAMELS_Files_Ngen/ForPaper/AllBasins2023-03-141248.csv'
 Priority=pd.read_csv(Priority_file,dtype={'hru_id_CAMELS': str})
 
-print(f"Selected_calibration.index; {Selected_calibration.index}")
+# print(f"Selected_calibration.index; {Selected_calibration.index}")
 # subset to hru's in Selected_calibrations
 Priority = Priority[Priority['hru_id_CAMELS'].isin(Selected_calibration.index)]
 Priority=Priority.set_index(['hru_id_CAMELS'])
 Priority=Priority.dropna()
 
-print(f'Priority: {Priority}')
+# print(f'Priority: {Priority}')
 
 # subset to HRU's as desired
 # BChoat - Editing to run any catchment that previously had output for CFE or CFE_X
@@ -144,12 +144,12 @@ print(f'Priority: {Priority}')
 #Priority=Priority[Priority['Sum']==1]
 #Priority=Priority[(Priority['Sum']>=2)]
 
-print(f'Selected_calibration: {Selected_calibration}')
-print(f'Priority.index.values: {Priority.index.values}')
+# print(f'Selected_calibration: {Selected_calibration}')
+# print(f'Priority.index.values: {Priority.index.values}')
 # BChoat: we only want to run HRUs that were previously ran for CFE, so subset to those catchments
 Selected_calibration=Selected_calibration.loc[Priority.index.values]
 Selected_calibration=Selected_calibration.sort_values(by="NCat")
-print(f'Selected_calibration: {Selected_calibration}')
+# print(f'Selected_calibration: {Selected_calibration}')
 
 try:
     Selected_calibration=Selected_calibration.drop('04197170')
@@ -205,7 +205,7 @@ for i in range(0,len(Selected_calibration)):
 #    elif Selected_calibration.iloc[i]["NCat"] < 1: partition = 1 # 1 # 4 
 #    elif Selected_calibration.iloc[i]["NCat"] < 48: partition = 1 # 1 # 8
 #    elif Selected_calibration.iloc[i]["NCat"] < 64: partition = 1 # 1 # 8
-    elif Selected_calibration.iloc[i]["NCat"] > 150: partition = 25 # 1 # 8
+    elif Selected_calibration.iloc[i]["NCat"] > 150: partition = 1 # 1 # 8
 
  
     else:  partition = 1 # 1 # 16
@@ -375,6 +375,9 @@ for i in range(0,len(Selected_calibration)):
                     out=subprocess.call(str_sub,shell=True)
                     
                     print('\n\n Removing output files from previous run if they exist \n\n')
+                    # BChoat, starting getting error due to presence of nex*parquet files, so removning those to
+                    str_sub = "rm nex*.parquet"
+                    out = subprocess.call(str_sub, shell = True)
                     str_sub="rm flowveldepth_Ngen.h5"
                     out=subprocess.call(str_sub,shell=True)
                     str_sub = 'rm objective_log.txt'
