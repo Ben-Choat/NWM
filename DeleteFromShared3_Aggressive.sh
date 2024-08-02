@@ -16,8 +16,11 @@
 
 
 # Define the paths to the directories
-dir1="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/TEST_BEN"
-dir2="/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen_Original/TEST_Ben"
+# dir1="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/TEST_BEN"
+# dir2="/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen_Original/TEST_Ben"
+dir1="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/"
+dir2="/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen_Original/"
+
 
 # define output file name that logs actions
 logfile="Shared3AgressiveDelete_TEST_log.csv"

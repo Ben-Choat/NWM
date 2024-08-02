@@ -54,21 +54,25 @@ min_nexuses = 2
 # so define min and max number catchments
 # dividing into <50, 70, 90, 110, 150
 min_ncat = 0
-max_ncat = 50
+max_ncat = 300 # 50
 
 # if want to run test runs, provide hru_ids for catchments here
 # set as empty list if do not want to run tests
 # hru_run = ['10259000', '08066300']
-hru_run = []
+#hru_run = ['01057000']
 
 # main folder holding individual HRU information (i.e., the main working directories for this script
 Hydrofabrics_folder="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/"
 # Hydrofabrics_folder_HD="/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen_Test/"
 Hydrofabrics_folder_HD="/media/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/"
 
+# external hard drive directory holding all data for HRUs
+data_dir = '/media/Expansion/Projects/CAMELS/CAMELS_Files_NGEN_Original'
+
 
 # file holding information about best models and runs. 
 # Used as basis for subsetting to hru's we are working with here.
+# Selected_calibration_file = f'{data_dir}/CAMELS_v3_calib_BestModelsAll.csv'
 # Select_calibration_file="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/Select_calibration_HLR_RFC.csv"
 # Selected_calibration = Selected_calibration[~Selected_calibration.index.duplicated(keep='first')]
 # Select_calibration_file="/media/west/Expansion/Projects/CAMELS/CAMELS_Files_Ngen/Results/SelectModelCal/CAMELS_v3_calib_BestModels.csv"
@@ -105,6 +109,9 @@ calib_config_dir="/home/west/Projects/CAMELS/CAMELS_Files_Ngen/calib_conf/"
 start_time="2008-10-01 00:00:00"
 end_time="2013-10-01 00:00:00"
 # end_time="2008-10-05 00:00:00"
+
+# directory in which to place usgs streamflow data used during calibration
+dir_usgsQ_out = '/media/Expansion/Projects/CAMELS/USGS_Q_20071001_20131001'
 
 
 # Rainfall_Runoff_ModelAr=["CFE","CFE_X","Topmodel"]
@@ -233,6 +240,15 @@ for i in range(0,len(Selected_calibration)):
             file1.write(str_log)    
             file1.close()
             
+            # copy everything for this HRU from data_dir to local to run
+            if os.path.exists(f'{Hydrofabrics_folder}/{Folder_CAMELS}'):
+                print('\n\nLOCAL FOLDER FOR HRU ALREADY EXISTS SO NOT COPYING\n\n')
+            else:
+                str_sub = f"cp -r {data_dir}/{Folder_CAMELS} {Hydrofabrics_folder}/{Folder_CAMELS}"
+                out=subprocess.call(str_sub,shell=True)          
+                        
+
+
             # output is placed in directory in which it was executed, so we define
             # work_dir to always be in the catchment folder for which we are simulating
             work_dir=Hydrofabrics_folder+Folder_CAMELS+"/"
@@ -317,7 +333,11 @@ for i in range(0,len(Selected_calibration)):
                     print('\n\n-----------------------------')
                     print(f'{objective_log_HD}')                    
                     print('already exists and is the correct length, so going to next HRU')
+                    print('removing HRU data from local and continuing to next HRU.')
                     print('-----------------------------\n\n')
+                    str_sub = f"rm -r {Hydrofabrics_folder}/{Folder_CAMELS}"
+                    out=subprocess.call(str_sub,shell=True)          
+
                     continue
                     # size = os.path.getsize(objective_log)
 
@@ -336,9 +356,9 @@ for i in range(0,len(Selected_calibration)):
                     file1.close()
                     
                     # Check on forcing
-                    input_dir=work_dir_HD+"/forcing/"
-                    output_file=work_dir+"/forcing.nc"
-                    
+                    # input_dir=work_dir_HD+"/forcing/"
+                    input_dir=work_dir+"/forcing/"
+                    output_file=work_dir+"/forcing.nc"                    
                     local_folder=work_dir+"/forcing"
                     
                     # BChoat: redefine size to compare size of output_file
@@ -350,18 +370,23 @@ for i in range(0,len(Selected_calibration)):
                     # Convert forcing from CSV to NETCDF if it does not exist    
                     # if NETCDF file size is < 5000, then assumed incorrect, so recreate.
                     # BChoat; 5000 was not catching some incorrect files, so upping to 15000
-                    # won't hurt to remake the .nc files 
+                    # won't hurt to remake the .nc files other than run time costs.
                     if (not os.path.exists(output_file)) | (size<15000):
 
                         os.chdir(NextGen_folder+"/utilities/data_conversion")
-                        str_sub="python csv2catchmentnetcdf.py -i "+input_dir+ " -o "+ output_file+ " -j 2"
+                        str_sub=f"python csv2catchmentnetcdf.py -i {input_dir } -o  {output_file} -j 2"
                         out=subprocess.call(str_sub,shell=True)          
+
+                        # BChoat; copy new .nc file to perminant storage
+                        str_sub = f'cp {output_file} {data_dir}/{folder_CAMELS}/'
+                        out = subprocess.call(str_sub, shell = True)
                         
-                        str_sub="mv "+local_folder+ " "+ work_dir_HD
-                        out=subprocess.call(str_sub,shell=True)          
+                        # str_sub="mv "+local_folder+ " "+ work_dir_HD
+                        # str_sub=f"mv {local_folder} {data_dir}/{folder_CAMELS}"
+                        # out=subprocess.call(str_sub,shell=True)          
                 
-                        str_sub="rm -rf "+work_dir
-                        out=subprocess.call(str_sub,shell=True)   
+                        # str_sub="rm -rf "+work_dir
+                        # out=subprocess.call(str_sub,shell=True)   
 
                         # Go to working directory ... below here actions occur in work_dir -BChoat
                         os.chdir(work_dir)
@@ -375,9 +400,6 @@ for i in range(0,len(Selected_calibration)):
                     out=subprocess.call(str_sub,shell=True)
                     
                     print('\n\n Removing output files from previous run if they exist \n\n')
-                    # BChoat, starting getting error due to presence of nex*parquet files, so removning those to
-                    str_sub = "rm nex*.parquet"
-                    out = subprocess.call(str_sub, shell = True)
                     str_sub="rm flowveldepth_Ngen.h5"
                     out=subprocess.call(str_sub,shell=True)
                     str_sub = 'rm objective_log.txt'
@@ -407,7 +429,9 @@ for i in range(0,len(Selected_calibration)):
                     str_sub="rm -rf ./t-route "
                     out=subprocess.call(str_sub,shell=True) 
                     
-                    str_sub="cp -rf /home/west/Projects/CAMELS/CAMELS_Files_Ngen/t-route ."  
+                    # str_sub="cp -rf /home/west/Projects/CAMELS/CAMELS_Files_Ngen/t-route ."  
+                    str_sub = f"cp -rf {data_dir}/t-route ."  
+
                     out=subprocess.call(str_sub,shell=True)  
                     
                     str_sub="cp "+calib_realiz_base + " ." 
@@ -562,8 +586,13 @@ for i in range(0,len(Selected_calibration)):
                     # if the flowpath_parameters_mod.json file does not exist, then copy it from S3 bucket
                     print('about to copy from s3')
                     catchment_file = f'{work_dir}parameters/flowpath_parameters_mod.json'
+
+                    # during some intermediate processing, flowpath_parameters_mod.json was
+                    # copied as a directory, so if a directory, remove it
+                    if os.path.isdir(catchment_file):
+                        os.rmdir(path)
                     if(not os.path.isfile(catchment_file)):
-                        str_sub=f"aws s3 cp s3://formulations-dev/CAMELS20/{Folder_CAMELS}/parameters/flowpath_parameters_mod.json {catchment_file}"
+                        str_sub=f"aws s3 cp s3://formulations-dev/CAMELS20/{Folder_CAMELS}/parameters/flowpath_parameters_mod.json {work_dir}parameters"
                         print(f'running {str_sub}')
                         out=subprocess.call(str_sub,shell=True)
                 
@@ -599,9 +628,10 @@ for i in range(0,len(Selected_calibration)):
 #                        which_py = which_py.decode('utf_8').strip()
 #                        print(f'\n\nWhich Python: {which_py}\n\n')
 
-
+                        print('about to try running calibration round')
                         try:
                             out=subprocess.call(str_sub, shell=True)
+                            print('SUCCESSFULLY RAN CALIBRATION ROUND')
                         except:
                             raise Exception("\n\n----\nERROR: calibration.py failed\n----\n\n")
 
@@ -677,7 +707,20 @@ for i in range(0,len(Selected_calibration)):
                             str_sub = f'mv best_params.txt {calib_folder_HD}'
                             out = subprocess.call(str_sub, shell = True)
                             str_sub="mv *parameter_df_state.parquet "+calib_folder_HD
-                            out=subprocess.call(str_sub,shell=True)                                                                                                                                                                                                                                                                                  
+                            out=subprocess.call(str_sub,shell=True)
+
+                            # move usgsQ to defined folder. Create the folder if needed
+                            if not os.path.exists(dir_usgsQ_out):
+                                os.mkdir(dir_usgsQ_out)
+                            str_sub = 'mv ./Validation/usgs_hourly_flow_calibration.csv '\
+                                        '{dir_usgsQ_out}/usgs_hourly_flow_calibration_{hru_id}.csv'
+                            out = subprocess.call(str_sub, shell = True)
+
+                            # remove working folder from local
+                            print("Removing local working folder")
+                            str_sub = f"rm -r {Hydrofabrics_folder}/{Folder_CAMELS}"
+                            out=subprocess.call(str_sub,shell=True)          
+
                     else:  
                         NG_NotRunning=pd.concat([NG_NotRunning,Selected_calibration.iloc[i]])
                      

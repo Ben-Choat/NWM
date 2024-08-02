@@ -25,13 +25,13 @@ TOPMODEL_params: &TOPMODEL_params
   -
       name: chv
       min: 10
-      max: 25000
+      max: 4000
       init: 3600
 
   -
       name: rv
-      min: 1
-      max: 5000
+      min: 10
+      max: 4000
       init: 1000
 
 general:
@@ -43,6 +43,7 @@ general:
   strategy:
     algorithm: dds
     type: estimation
+    neighborhood: 0.2 # 0.5 # 0.2 is default
   workdir: /home/west/Projects/CAMELS/CAMELS_Files_Ngen/camels_10259000_22592131/
 model:
   binary: ./ngen/cmake_build/ngen
